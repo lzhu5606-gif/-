@@ -1,2 +1,570 @@
- Supabase 申请到的两串代码填在这里
- supabase图片库
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>图库（Supabase）小住</title>
+  
+  <!-- 更换为更稳定、防屏蔽的 jsdelivr CDN 加载库 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.23.3/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    :root { --app-bg: #F5F5F7; }
+    body {
+      background-color: var(--app-bg);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    @supports (padding-top: env(safe-area-inset-top)) {
+      .safe-top { padding-top: max(env(safe-area-inset-top), 16px); }
+      .safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 24px); }
+    }
+    .fade-enter-active { animation: fadeIn 0.3s ease-out forwards; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.98); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .glass-card {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(25px);
+      -webkit-backdrop-filter: blur(25px);
+      border: 1px solid rgba(255,255,255,0.6);
+    }
+    
+    /* 优化下拉菜单的默认样式 */
+    select {
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      appearance: none;
+      background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+      background-repeat: no-repeat;
+      background-position: right 1rem center;
+      background-size: 1em;
+    }
+  </style>
+</head>
+<body>
+  
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useMemo } = React;
+
+    // 你的正确配置（已填入，无需修改！）
+    const mySupabaseConfig = {
+      url: "https://gfmjapeyxoquylmygcsz.supabase.co",
+      key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdmbWphcGV5eG9xdXlsbXlnY3N6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyNDkxNDQsImV4cCI6MjA4NzgyNTE0NH0.alqfjcwQMVQYEpkXJ3A2yOivEf74lR-UjMZVtC9IjvA"
+    };
+
+    // SVG 图标
+    const PlusIcon = ({ size=24, className="" }) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/><path d="M12 5v14"/></svg>;
+    const XIcon = ({ size=24, className="" }) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>;
+    const TrashIcon = ({ size=24, className="" }) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>;
+    const UploadCloudIcon = ({ size=24, className="" }) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></svg>;
+    const CheckCircleIcon = ({ size=24, className="" }) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>;
+    const LoaderIcon = ({ size=24, className="" }) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`animate-spin ${className}`}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>;
+    const CloudIcon = ({ size=24, className="" }) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>;
+    const ChevronLeftIcon = ({ size=24, className="" }) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m15 18-6-6 6-6"/></svg>;
+    const ChevronRightIcon = ({ size=24, className="" }) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m9 18 6-6-6-6"/></svg>;
+    const AlertIcon = ({ size=24, className="" }) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>;
+
+    function App() {
+      // 核心数据
+      const [images, setImages] = useState([]);
+      const [isLoadingDB, setIsLoadingDB] = useState(true);
+      const [isDbConfigured, setIsDbConfigured] = useState(false);
+      const [userUid, setUserUid] = useState(''); 
+      const [supabaseClient, setSupabaseClient] = useState(null); 
+      
+      // 视图过滤状态
+      const [activeMainCategory, setActiveMainCategory] = useState('行车记录仪');
+      const [activeSeries, setActiveSeries] = useState('全部系列'); // 新增：系列筛选
+      const [activeModel, setActiveModel] = useState('全部型号');   // 新增：型号筛选
+      const [viewingImage, setViewingImage] = useState(null); 
+      
+      // 上传抽屉状态
+      const [isModalOpen, setIsModalOpen] = useState(false);
+      const [isSaving, setIsSaving] = useState(false);
+      const [saveStatusText, setSaveStatusText] = useState(''); 
+      const [uploadCategory, setUploadCategory] = useState('行车记录仪'); 
+      const [uploadSeries, setUploadSeries] = useState(''); // 新增：上传时的系列
+      const [newName, setNewName] = useState(''); // 型号名称
+      
+      const [newImagesData, setNewImagesData] = useState([]); 
+      const fileInputRef = useRef(null);
+      const [toastMsg, setToastMsg] = useState('');
+      const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+
+      // --- 诊断系统状态 ---
+      const [criticalError, setCriticalError] = useState(null);
+      const [errorModalMsg, setErrorModalMsg] = useState('');
+
+      const showToast = (msg) => {
+        setToastMsg(msg);
+        setTimeout(() => setToastMsg(''), 3000);
+      };
+
+      useEffect(() => {
+        let localUid = localStorage.getItem('dashcam_user_uid');
+        if (!localUid) {
+          localUid = 'user_' + Math.random().toString(36).substr(2, 9);
+          localStorage.setItem('dashcam_user_uid', localUid);
+        }
+        setUserUid(localUid);
+
+        try {
+          const client = window.supabase.createClient(mySupabaseConfig.url, mySupabaseConfig.key);
+          setSupabaseClient(client);
+          setIsDbConfigured(true);
+        } catch (err) {
+          setCriticalError("初始化失败！可能是国内网络拦截了，请刷新重试。");
+          setIsLoadingDB(false);
+        }
+      }, []);
+
+      useEffect(() => {
+        if (supabaseClient) fetchImages(supabaseClient);
+      }, [supabaseClient]);
+
+      const fetchImages = async (client) => {
+        setIsLoadingDB(true);
+        const { data, error } = await client.from('dashcam_images').select('*').order('timestamp', { ascending: false }).limit(1000);
+
+        if (error) {
+          console.error("加载数据失败", error);
+          if (error.code === '42P01') {
+            setCriticalError("第一处错：没有建表！\n提示：你忘了在 SQL Editor 里运行建表代码。请回到本页面上面看我的【第三步】代码执行一下。");
+          } else {
+            setCriticalError(`连接数据库失败: ${error.message}`);
+          }
+          setIsLoadingDB(false);
+        } else {
+          setCriticalError(null); 
+          
+          // 核心改造：将 category 拆解为 大分类 和 系列
+          // 我们在存数据时，格式是 "行车记录仪#N系列"
+          const dbImages = data.map(item => {
+            let mainCat = item.category || '行车记录仪';
+            let series = '未分类'; // 兼容历史遗留老数据
+            
+            if (mainCat.includes('#')) {
+                const parts = mainCat.split('#');
+                mainCat = parts[0];
+                series = parts[1] || '未分类';
+            }
+
+            return {
+              id: item.id, 
+              name: item.name, 
+              category: mainCat, 
+              series: series,
+              url: item.url, 
+              uploaderId: item.uploaderid, 
+              timestamp: item.timestamp
+            };
+          });
+
+          setImages(dbImages);
+          setIsLoadingDB(false);
+        }
+      };
+
+      // ==== 视图联动逻辑 ====
+      // 1. 获取当前大分类下的所有图片
+      const mainCategoryImages = useMemo(() => images.filter(img => img.category === activeMainCategory), [images, activeMainCategory]);
+      
+      // 2. 提取当前大分类下都有哪些“系列”
+      const availableSeries = useMemo(() => {
+          return ['全部系列', ...Array.from(new Set(mainCategoryImages.map(img => img.series)))].filter(Boolean);
+      }, [mainCategoryImages]);
+
+      // 切换大分类时，重置系列为“全部系列”
+      useEffect(() => {
+          if (!availableSeries.includes(activeSeries)) setActiveSeries('全部系列');
+      }, [availableSeries, activeSeries]);
+
+      // 3. 获取当前系列下的所有图片
+      const seriesImages = useMemo(() => {
+          return mainCategoryImages.filter(img => activeSeries === '全部系列' || img.series === activeSeries);
+      }, [mainCategoryImages, activeSeries]);
+
+      // 4. 提取当前系列下都有哪些“型号”
+      const availableModels = useMemo(() => {
+          return ['全部型号', ...Array.from(new Set(seriesImages.map(img => img.name)))].filter(Boolean);
+      }, [seriesImages]);
+
+      // 切换系列时，重置型号为“全部型号”
+      useEffect(() => {
+          if (!availableModels.includes(activeModel)) setActiveModel('全部型号');
+      }, [availableModels, activeModel]);
+
+      // 5. 获取最终筛选后的图片列表
+      const finalImages = useMemo(() => {
+          return seriesImages.filter(img => activeModel === '全部型号' || img.name === activeModel);
+      }, [seriesImages, activeModel]);
+
+      // 6. 按型号分组显示
+      const groupedImages = useMemo(() => {
+        const groups = {};
+        finalImages.forEach(img => { 
+            if (!groups[img.name]) groups[img.name] = []; 
+            groups[img.name].push(img); 
+        });
+        return groups;
+      }, [finalImages]);
+
+      // ==== 上传时的自动补全联动逻辑 ====
+      const uploadAvailableSeries = useMemo(() => {
+          return Array.from(new Set(images.filter(img => img.category === uploadCategory && img.series !== '未分类').map(img => img.series)));
+      }, [images, uploadCategory]);
+
+      const uploadAvailableModels = useMemo(() => {
+          return Array.from(new Set(images.filter(img => img.category === uploadCategory && img.series === uploadSeries).map(img => img.name)));
+      }, [images, uploadCategory, uploadSeries]);
+
+
+      const processFile = (file) => {
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const img = new Image();
+            img.src = reader.result;
+            img.onload = () => {
+              const canvas = document.createElement('canvas');
+              let width = img.width, height = img.height;
+              if (width > height && width > 1200) { height *= 1200 / width; width = 1200; } 
+              else if (height > 1200) { width *= 1200 / height; height = 1200; }
+              canvas.width = width; canvas.height = height;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, width, height);
+              const previewDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+              canvas.toBlob((blob) => { resolve({ preview: previewDataUrl, blob: blob }); }, 'image/jpeg', 0.8);
+            };
+          };
+          reader.readAsDataURL(file);
+        });
+      };
+
+      const handleFileChange = async (e) => {
+        const files = Array.from(e.target.files);
+        if (!files.length) return;
+        const remainingSlots = 4 - newImagesData.length;
+        if (remainingSlots <= 0) return showToast("一次最多只能选择4张");
+        const filesToProcess = files.slice(0, remainingSlots);
+        const processedImages = await Promise.all(filesToProcess.map(file => processFile(file)));
+        setNewImagesData(prev => [...prev, ...processedImages]);
+        if(fileInputRef.current) fileInputRef.current.value = '';
+      };
+
+      const removeNewImage = (idx) => setNewImagesData(prev => prev.filter((_, i) => i !== idx));
+
+      const handleSave = async () => {
+        if (!newName.trim() || !uploadSeries.trim() || newImagesData.length === 0 || isSaving) return;
+        setIsSaving(true);
+        try {
+          const newRows = [];
+          
+          // 核心：将分类和系列用#拼接存入数据库，巧妙避开修改数据表结构的麻烦
+          const dbCategoryString = `${uploadCategory}#${uploadSeries.trim()}`;
+
+          for (let i = 0; i < newImagesData.length; i++) {
+            setSaveStatusText(`正在上传图片 (${i + 1}/${newImagesData.length})...`);
+            const imgObj = newImagesData[i];
+            const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.jpg`;
+            
+            const { error: uploadError } = await supabaseClient.storage.from('images').upload(fileName, imgObj.blob, { contentType: 'image/jpeg' });
+
+            if (uploadError) {
+                if (uploadError.message.includes('Bucket not found')) throw new Error("存储桶不存在！请在后台 Storage 里创建一个名为 'images' 的存储桶！");
+                else if (uploadError.statusCode === 403 || uploadError.message.includes('security')) throw new Error("存储桶权限被拦截！请确认你在新建 images 存储桶时，是否打勾了 【Public bucket】。");
+                else throw new Error(`上传图片失败: ${uploadError.message}`);
+            }
+
+            const { data: { publicUrl } } = supabaseClient.storage.from('images').getPublicUrl(fileName);
+            newRows.push({ 
+                name: newName.trim(), 
+                category: dbCategoryString, // 存入拼接后的分类名
+                url: publicUrl, 
+                uploaderid: userUid, 
+                timestamp: Date.now() 
+            });
+          }
+
+          setSaveStatusText("正在保存记录...");
+          const { error: dbError } = await supabaseClient.from('dashcam_images').insert(newRows);
+          
+          if (dbError) {
+              if (dbError.code === '42P01') throw new Error("数据表找不到！");
+              else if (dbError.message.includes('security') || dbError.message.includes('RLS')) throw new Error("数据库插入权限被锁！请检查你是否执行了我给你的 RLS 放行代码。");
+              else throw new Error(`保存记录失败: ${dbError.message}`);
+          }
+
+          // 成功后复位表单
+          setNewName(''); setNewImagesData([]); setIsModalOpen(false);
+          setActiveMainCategory(uploadCategory); 
+          setActiveSeries(uploadSeries.trim());
+          setActiveModel(newName.trim());
+          
+          showToast(`成功上传 ${newRows.length} 张！`);
+          fetchImages(supabaseClient); 
+
+        } catch (error) {
+          setErrorModalMsg(error.message);
+        } finally {
+          setIsSaving(false); setSaveStatusText("");
+        }
+      };
+
+      const handleDelete = async (id, imgUploaderId) => {
+        if (userUid !== imgUploaderId) return showToast('只能删除你自己上传的图片');
+        setConfirmDeleteId(id);
+      };
+
+      const executeDelete = async () => {
+        if (!confirmDeleteId) return;
+        const targetImage = images.find(img => img.id === confirmDeleteId);
+        try {
+          if (targetImage && targetImage.url.includes('/storage/v1/object/public/images/')) {
+             const urlParts = targetImage.url.split('/');
+             const fileName = urlParts[urlParts.length - 1];
+             if (fileName) await supabaseClient.storage.from('images').remove([fileName]);
+          }
+          const { error } = await supabaseClient.from('dashcam_images').delete().eq('id', confirmDeleteId);
+          if (error) throw error;
+          showToast('已彻底删除');
+          if (viewingImage?.id === confirmDeleteId) setViewingImage(null);
+          setImages(prev => prev.filter(img => img.id !== confirmDeleteId));
+        } catch(e) {
+          setErrorModalMsg("删除失败：" + e.message);
+        } finally {
+          setConfirmDeleteId(null);
+        }
+      };
+
+      if (criticalError) {
+         return (
+             <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+                 <div className="bg-white border-l-8 border-red-500 rounded-2xl shadow-2xl p-8 max-w-lg w-full">
+                     <div className="flex items-center gap-3 text-red-600 mb-4">
+                         <AlertIcon size={32} />
+                         <h2 className="text-2xl font-bold">发现后台配置错误</h2>
+                     </div>
+                     <p className="text-gray-800 font-medium text-lg leading-relaxed whitespace-pre-wrap mb-6">{criticalError}</p>
+                 </div>
+             </div>
+         );
+      }
+
+      return (
+        <div className="min-h-screen relative pb-24">
+          
+          <div className={`fixed top-14 left-1/2 transform -translate-x-1/2 z-[100] bg-gray-900/95 text-white px-6 py-3.5 rounded-full shadow-2xl text-sm font-semibold transition-all duration-400 pointer-events-none flex items-center gap-2 ${toastMsg ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-8 scale-95'}`}>
+            {toastMsg.includes('成功') && <CheckCircleIcon size={18} className="text-green-400" />} {toastMsg}
+          </div>
+
+          {errorModalMsg && (
+            <div className="fixed inset-0 z-[120] bg-black/60 flex items-center justify-center p-5 fade-enter-active">
+                <div className="bg-white rounded-3xl p-7 max-w-sm w-full shadow-2xl">
+                    <h3 className="text-xl font-bold text-red-600 mb-3 flex items-center gap-2"><XIcon size={24} /> 操作失败</h3>
+                    <p className="text-gray-700 mb-8 font-medium leading-relaxed">{errorModalMsg}</p>
+                    <button onClick={() => setErrorModalMsg('')} className="w-full bg-red-500 text-white py-3.5 rounded-2xl font-bold active:scale-95 transition-all">我知道了</button>
+                </div>
+            </div>
+          )}
+
+          {confirmDeleteId && (
+            <div className="fixed inset-0 bg-black/40 backdrop-blur-md z-[90] flex items-center justify-center p-5 fade-enter-active">
+               <div className="bg-white/90 backdrop-blur-2xl rounded-[32px] p-7 max-w-sm w-full border border-white/50 text-center">
+                  <div className="w-14 h-14 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4"><TrashIcon size={28} /></div>
+                  <h3 className="text-xl font-bold mb-2 text-gray-900">彻底删除图片？</h3>
+                  <p className="text-gray-500 mb-8 text-sm leading-relaxed">不可恢复。</p>
+                  <div className="flex gap-4">
+                    <button onClick={() => setConfirmDeleteId(null)} className="flex-1 py-3.5 bg-gray-100 hover:bg-gray-200 rounded-2xl font-bold text-gray-700">取消</button>
+                    <button onClick={executeDelete} className="flex-1 py-3.5 bg-red-500 text-white rounded-2xl font-bold">删除</button>
+                  </div>
+               </div>
+            </div>
+          )}
+
+          <header className="sticky top-0 z-40 bg-white/70 backdrop-blur-2xl border-b border-gray-200/60 safe-top pt-4 shadow-sm">
+            <div className="flex items-center justify-between px-6 pb-4">
+              <h1 className="text-[28px] font-bold tracking-tight text-gray-900">产品图库</h1>
+              {isLoadingDB && <LoaderIcon size={20} className="text-gray-400" />}
+            </div>
+            
+            {/* 一级菜单：大分类 */}
+            <div className="px-6 pb-4">
+              <div className="flex bg-gray-200/70 p-1 rounded-[14px]">
+                {['行车记录仪', 'carplay'].map(cat => (
+                  <button key={cat} onClick={() => { setActiveMainCategory(cat); }}
+                    className={`flex-1 py-2 text-[15px] font-bold rounded-[10px] transition-all duration-300 ${activeMainCategory === cat ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            {/* 二级联动下拉菜单：系列 与 型号 */}
+            <div className="px-6 pb-4 flex gap-3">
+               <div className="flex-1">
+                 <label className="text-xs font-bold text-gray-500 mb-1.5 block px-1">📁 选择系列</label>
+                 <select 
+                   value={activeSeries} 
+                   onChange={(e) => setActiveSeries(e.target.value)}
+                   className="w-full bg-gray-100/80 border border-gray-200/80 rounded-[14px] px-4 py-2.5 text-[14px] font-bold text-gray-700 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                 >
+                   {availableSeries.map(s => <option key={s} value={s}>{s}</option>)}
+                 </select>
+               </div>
+               
+               <div className="flex-1">
+                 <label className="text-xs font-bold text-gray-500 mb-1.5 block px-1">🏷️ 选择型号</label>
+                 <select 
+                   value={activeModel} 
+                   onChange={(e) => setActiveModel(e.target.value)}
+                   className="w-full bg-gray-100/80 border border-gray-200/80 rounded-[14px] px-4 py-2.5 text-[14px] font-bold text-gray-700 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                 >
+                   {availableModels.map(m => <option key={m} value={m}>{m}</option>)}
+                 </select>
+               </div>
+            </div>
+          </header>
+
+          <main className="p-4 md:p-6 max-w-5xl mx-auto">
+            {isLoadingDB ? (
+              <div className="flex flex-col items-center justify-center pt-32 text-gray-400 space-y-4"><LoaderIcon size={40} className="text-blue-500" /><p>读取中...</p></div>
+            ) : mainCategoryImages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center pt-32 pb-20 px-6 text-center">
+                <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center mb-6"><UploadCloudIcon size={40} className="text-blue-500" /></div>
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">该分类下还没有图片</h2>
+                <button onClick={() => { setIsModalOpen(true); setUploadCategory(activeMainCategory); }} className="mt-6 px-8 py-3.5 bg-blue-600 text-white font-bold rounded-full shadow-lg shadow-blue-500/30 active:scale-95 transition-all">上传首图</button>
+              </div>
+            ) : (
+              <div className="space-y-10">
+                {Object.entries(groupedImages).map(([modelName, groupImgs]) => {
+                  return (
+                    <section key={modelName} className="fade-enter-active">
+                      <div className="flex flex-col gap-1 mb-3 px-1">
+                        <div className="flex items-center gap-3">
+                          <h2 className="text-[22px] font-bold text-gray-900 tracking-tight">{modelName}</h2>
+                          <span className="text-xs font-bold text-blue-600 bg-blue-100 px-2.5 py-1 rounded-full">共 {groupImgs.length} 张</span>
+                        </div>
+                        {groupImgs[0].series !== '未分类' && (
+                            <span className="text-[13px] font-semibold text-gray-400">所属：{groupImgs[0].series}</span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 md:gap-5">
+                        {groupImgs.map((img) => (
+                          <div key={img.id} className="group relative bg-gray-100 rounded-[20px] shadow-sm hover:shadow-lg overflow-hidden cursor-pointer aspect-square" onClick={() => setViewingImage(img)}>
+                            <img src={img.url} className="w-full h-full object-cover" />
+                            <button onClick={(e) => { e.stopPropagation(); handleDelete(img.id, img.uploaderId); }} className="absolute top-2 right-2 p-2 bg-black/30 rounded-full text-white opacity-0 group-hover:opacity-100 hover:bg-red-500 transition-all"><TrashIcon size={16} /></button>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+            )}
+          </main>
+
+          <button onClick={() => setIsModalOpen(true)} className="fixed bottom-8 right-6 z-40 w-16 h-16 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-all"><PlusIcon size={32} /></button>
+
+          {viewingImage && (
+            <div className="fixed inset-0 z-[80] bg-black/95 flex flex-col fade-enter-active">
+              <div className="flex items-center justify-between p-4 safe-top text-white">
+                <div className="flex-1"></div>
+                <h2 className="text-lg font-bold">{viewingImage.name} <span className="text-sm font-normal text-gray-400 ml-2">({viewingImage.series})</span></h2>
+                <div className="flex-1 flex justify-end gap-2"><button onClick={() => setViewingImage(null)} className="p-2"><XIcon size={28} /></button></div>
+              </div>
+              <div className="flex-1 flex items-center justify-center p-2" onClick={() => setViewingImage(null)}>
+                <img src={viewingImage.url} onClick={(e) => e.stopPropagation()} className="max-w-full max-h-full object-contain rounded-lg" />
+              </div>
+            </div>
+          )}
+
+          <div className={`fixed inset-0 bg-black/30 backdrop-blur-sm z-50 transition-opacity duration-400 ${isModalOpen ? 'opacity-100 visible' : 'opacity-0 invisible'}`} onClick={() => setIsModalOpen(false)}></div>
+          <div className={`fixed bottom-0 left-0 right-0 z-50 glass-card bg-white/80 rounded-t-[36px] shadow-[0_-10px_40px_rgba(0,0,0,0.1)] transition-transform duration-400 transform max-w-2xl mx-auto ${isModalOpen ? 'translate-y-0' : 'translate-y-full'} flex flex-col max-h-[90vh]`}>
+            <div className="p-6 safe-bottom overflow-y-auto hide-scrollbar">
+              <div className="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-8 shrink-0"></div>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-[22px] font-bold">上传至图库</h2>
+                <button onClick={() => setIsModalOpen(false)} className="p-2 bg-gray-100 rounded-full"><XIcon size={20} /></button>
+              </div>
+              
+              <div className="space-y-6">
+                {/* 分类选区 */}
+                <div>
+                  <label className="block text-[15px] font-semibold mb-2 ml-1 text-gray-700">步骤 1：所属分类</label>
+                  <div className="flex bg-gray-200/70 p-1 rounded-[14px]">
+                    {['行车记录仪', 'carplay'].map(cat => (
+                      <button key={cat} onClick={() => setUploadCategory(cat)} className={`flex-1 py-2.5 text-[15px] font-bold rounded-[10px] transition-all ${uploadCategory === cat ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}>{cat}</button>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* 新增：系列选区 */}
+                <div>
+                  <label className="block text-[15px] font-semibold mb-2 ml-1 text-gray-700">步骤 2：产品系列 (可点选或手写)</label>
+                  {uploadAvailableSeries.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-2 ml-1">
+                        {uploadAvailableSeries.map(s => (
+                          <button key={s} onClick={() => setUploadSeries(s)} className={`text-sm px-3.5 py-1.5 rounded-full border transition-all ${uploadSeries === s ? 'bg-blue-100 border-blue-300 text-blue-700 font-bold' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{s}</button>
+                        ))}
+                      </div>
+                  )}
+                  <input type="text" value={uploadSeries} onChange={(e) => setUploadSeries(e.target.value)} placeholder="例如：N系列、IK系列" className="w-full px-5 py-4 bg-white/70 border-2 border-white/50 rounded-[20px] text-[16px] font-medium focus:border-blue-500 focus:bg-white outline-none transition-all placeholder:text-gray-400" />
+                </div>
+
+                {/* 型号选区 */}
+                <div>
+                  <label className="block text-[15px] font-semibold mb-2 ml-1 text-gray-700">步骤 3：产品型号 (可点选或手写)</label>
+                  {uploadAvailableModels.length > 0 && uploadSeries.trim() !== '' && (
+                      <div className="flex flex-wrap gap-2 mb-2 ml-1">
+                        {uploadAvailableModels.map(m => (
+                          <button key={m} onClick={() => setNewName(m)} className={`text-sm px-3.5 py-1.5 rounded-full border transition-all ${newName === m ? 'bg-blue-100 border-blue-300 text-blue-700 font-bold' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}>{m}</button>
+                        ))}
+                      </div>
+                  )}
+                  <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="例如：N4、IK7" className="w-full px-5 py-4 bg-white/70 border-2 border-white/50 rounded-[20px] text-[16px] font-medium focus:border-blue-500 focus:bg-white outline-none transition-all placeholder:text-gray-400" />
+                </div>
+
+                {/* 图片选区 */}
+                <div>
+                  <label className="block text-[15px] font-semibold mb-2 ml-1 text-gray-700">步骤 4：选择图片 (最多4张)</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {newImagesData.map((imgObj, idx) => (
+                      <div key={idx} className="relative aspect-video rounded-[16px] overflow-hidden shadow-sm border border-gray-100"><img src={imgObj.preview} className="w-full h-full object-cover" /><button onClick={() => removeNewImage(idx)} className="absolute top-2 right-2 bg-black/60 text-white p-1.5 rounded-full hover:bg-red-500 transition-all"><XIcon size={14} /></button></div>
+                    ))}
+                    {newImagesData.length < 4 && (
+                      <div onClick={() => fileInputRef.current?.click()} className="aspect-video rounded-[16px] border-2 border-dashed border-gray-300 bg-white/50 flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 transition-all group">
+                          <div className="w-10 h-10 bg-white rounded-full shadow-sm flex items-center justify-center mb-2 group-hover:scale-110 transition-transform"><PlusIcon size={20} className="text-blue-500" /></div>
+                          <span className="text-sm font-bold text-gray-400 group-hover:text-blue-500">添加 ({newImagesData.length}/4)</span>
+                      </div>
+                    )}
+                  </div>
+                  <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" multiple className="hidden" />
+                </div>
+
+                {/* 提交按钮 */}
+                <button onClick={handleSave} disabled={!newName.trim() || !uploadSeries.trim() || newImagesData.length === 0 || isSaving} className={`w-full py-4 rounded-[20px] font-bold text-lg flex items-center justify-center gap-2 transition-all ${(!newName.trim() || !uploadSeries.trim() || newImagesData.length === 0 || isSaving) ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/30 active:scale-[0.98]'}`}>
+                  {isSaving ? <><LoaderIcon size={22}/> {saveStatusText}</> : `正式发布图片`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
